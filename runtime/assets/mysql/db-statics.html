@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>统计信息</title>
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.3.2/echarts.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.3.2/theme/dark.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script>
+        window.chart_index=0
+        let query_api='http://127.0.0.1:{{.port}}/query'
+        let common_sql = ">=date_sub(now(), interval 200 day) GROUP BY date order by date asc;";
+
+        function render_chart_line(title,sql){
+            return new Promise((resolve,reject)=>{
+                window.chart_index++
+                let chart_div=document.createElement('div')
+                chart_div.id='chart-'+window.chart_index
+                chart_div.style="width: 90%;height:300px;margin: 40px auto;"
+                document.body.appendChild(chart_div)
+
+                $.post(query_api,{sql},resp=>{
+                    let xAxis_data=[]
+                    let series_data=[]
+                    resp.forEach(item=>{
+                        xAxis_data.push(item.date)
+                        series_data.push(item.value)
+                    })
+                    echarts.init(document.getElementById(chart_div.id),'dark').setOption({
+                        backgroundColor: '#181a1b',
+                        title: {text: title},
+                        tooltip: {trigger: 'axis'},
+                        xAxis: {type: 'category', data: xAxis_data},
+                        yAxis: {type: 'value'},
+                        series: [{data: series_data, type: 'line', smooth: true}]
+                    });
+                    resolve()
+                })
+            })
+        }
+    </script>
+</head>
+<body>
+
+    <script>
+        (async function(){
+            await render_chart_line('注册人数','SELECT DATE_FORMAT(reg_time, "%Y-%m-%d") as date,COUNT(id) as value FROM ins_user where reg_time'+common_sql)
+
+            await render_chart_line('订单量变化','SELECT DATE_FORMAT(`pays_time`, "%Y-%m-%d") as date,COUNT(id) as value FROM ins_order where pays_status=1 and pays_time'+common_sql)
+
+            await render_chart_line('交易金额变化','SELECT DATE_FORMAT(`pays_time`, "%Y-%m-%d") as date,sum(pays_price) as value FROM ins_order where pays_status=1 and pays_time'+common_sql)
+        })()
+
+    </script>
+</body>
+</html>

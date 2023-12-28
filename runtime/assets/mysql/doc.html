@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据库字典</title>
+    <style>
+        body {
+            font-size: 14px;
+            font-family:  -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+        }
+    
+        #index_wrap {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 200px;
+            padding-left: 20px;
+            overflow-y: scroll;
+        }
+    
+        #structure_wrap {
+            margin-left: 240px;
+        }
+    
+        .doc_title {
+            text-align: center;
+        }
+    
+        .index_link {
+            display: block;
+            margin: 0.5em 0;
+        }
+    
+        a {
+            text-decoration: none;
+            color: #4C6A96;
+        }
+    
+        a:hover {
+            color: blue;
+        }
+    
+        .structure_title {
+            font-size: 22px;
+        }
+    
+        .structure_title a {
+            font-size: 14px;
+        }
+    
+        .structure_title .tip {
+            color: gray;
+        }
+    
+        .structure_item {
+            border: 1px solid #C1C1C1;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+    
+        .structure_item table {
+            width: 100%;
+            background: #262626;
+            margin-top: 20px;
+        }
+    
+        .structure_item thead {
+            background: #DDD6D6;
+        }
+    
+        .structure_item tbody {
+            background: white;
+        }
+    
+        .structure_item th,
+        .structure_item td {
+            padding: 5px 10px;
+        }
+    
+        .structure_item td {
+            font-size: 16px;
+        }
+    
+        .table_comments {
+            color: gray;
+        }
+        .IS_NULLABLE_NO{
+            color: gray;
+            font-size: 0.8em !important;
+        }
+        .COLUMN_DEFAULT_NULL{
+            color: gray;
+            font-size: 0.8em !important;
+        }
+    </style>
+    
+</head>
+
+<body>
+    <h1 class="doc_title">数据库字典【{{.date}}】</h1>
+    <div id="index_wrap">
+        <h2 class="index_title" id="index_title">文档索引</h2>
+        <div class="index_content">
+            {{range $key,$val:=.tableList}}
+            <p class="index_link">
+                <a href="#table_{{$val.TABLE_NAME}}">{{$val.TABLE_NAME}}</a>
+            </p>
+            {{end}}
+        </div>
+    </div>
+    <div id="structure_wrap">
+        <h2 class="index_title">表结构列表</h2>
+        <div>
+            {{range $key,$val:=.tableList}}
+            <div class="structure_item" id="table_{{$val.TABLE_NAME}}">
+                <div class="structure_title">
+                    {{$val.TABLE_NAME}}
+                    <span class="tip">
+                        ({{$val.TABLE_COLLATION}})
+                    </span>
+                </div>
+                <div class="table_comments">
+                    {{$val.TABLE_COMMENT}}
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th width="40">序列</th>
+                            <th width="20%">列名</th>
+                            <th>备注</th>
+                            <th width="20%">类型</th>
+                            <th width="10%">默认值</th>
+                            <th width="60">是否为空</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range $k,$v:=$val.COLUMN_LIST}}
+                        <tr>
+                            <td align="center">{{$v.ORDINAL_POSITION}}</td>
+                            <td>{{$v.COLUMN_NAME}}</td>
+                            <td>{{$v.COLUMN_COMMENT}}</td>
+                            <td class="DATA_TYPE_{{$v.DATA_TYPE}}">{{$v.COLUMN_TYPE}}&nbsp;{{$v.EXTRA}}</td>
+                            <td class="COLUMN_DEFAULT_{{$v.COLUMN_DEFAULT}}">{{$v.COLUMN_DEFAULT}}</td>
+                            <td class="IS_NULLABLE_{{$v.IS_NULLABLE}}">{{$v.IS_NULLABLE}}</td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+            {{end}}
+        </div>
+    </div>
+
+</body>
+<script>
+    document.getElementById('index_wrap').style.height = document.documentElement.clientHeight + 'px';
+</script>
+</html>

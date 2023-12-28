@@ -1,0 +1,1636 @@
+<!DOCTYPE html>
+<html lang="en">
+
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="https://img.alicdn.com/tfs/TB1_ZXuNcfpK1RjSZFOXXa6nFXa-32-32.ico" type="image/x-icon">
+  <title>资源总览-阿里云</title>
+  <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.3.2/echarts.min.js"></script>
+  <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.3.2/theme/dark.js"></script>
+  <script src="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/vue/2.6.14/vue.min.js"></script>
+  <script src="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/element-ui/2.15.7/index.min.js"></script>
+  <link href="https://lf26-cdn-tos.bytecdntp.com/cdn/expire-1-M/element-ui/2.15.7/theme-chalk/index.min.css"
+    type="text/css" rel="stylesheet" />
+  <style>
+    p,
+    .el-table__cell {
+      margin: 0;
+      padding: 0;
+    }
+
+    .el-table {
+      width: 96%;
+      margin: 0 auto;
+      color: black;
+    }
+
+    .el-pagination {
+      text-align: right;
+      margin-top: 20px;
+    }
+
+    .el-icon-loading {
+      font-size: 50px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app" style="display:none;">
+    <el-tabs v-model="resource_tab" @tab-click="onChangeMainTab">
+      <el-tab-pane label="业务" name="site" id="main_site_tab" v-if="is_site_statics_enable">
+        <div v-for="(item,index) in site_statics_data" :key="index" :id="item.id"
+          style="width: 98%;height:300px;margin: 40px auto;"></div>
+      </el-tab-pane>
+      <el-tab-pane label="ECS" name="ecs" id="main_ecs_tab" v-if="is_aliyun_enable&&is_ecs_enable">
+        <!-- ecs列表 -->
+        <el-table :data="group_instance_list.ecs" stripe id="ecs_table"
+          :default-sort="{prop: 'CreationTime', order: 'descending'}">
+          <el-table-column label="实例ID" width="180">
+            <template slot-scope="scope">
+              <p>{{scope.row.InstanceId}}</p>
+              <p>{{scope.row.InstanceName}}</p>
+            </template>
+          </el-table-column>
+          <el-table-column label="规格详情">
+            <template slot-scope="scope">
+              <p>{{scope.row.InstanceType}}</p>
+              <p>{{scope.row.OSName}}</p>
+              <p>{{scope.row.Cpu}}核{{scope.row.Memory/1024}}G</p>
+            </template>
+          </el-table-column>
+          <el-table-column label="IP地址" width="200">
+            <template slot-scope="scope">
+              <p v-if="scope.row.PublicIpAddress.IpAddress[0]">公网：{{scope.row.PublicIpAddress.IpAddress[0]}}</p>
+              <p>内网：{{scope.row.VpcAttributes.PrivateIpAddress.IpAddress[0]}}</p>
+            </template>
+          </el-table-column>
+          <el-table-column label="带宽" width="180">
+            <template slot-scope="scope">
+              <p>公网入:{{scope.row.InternetMaxBandwidthIn}}M</p>
+              <p>公网出:{{scope.row.InternetMaxBandwidthOut}}M</p>
+            </template>
+          </el-table-column>
+          <el-table-column prop="RegionId" label="地域" width="180">
+            <template slot-scope="scope">
+              <p>{{getRegionTitle(scope.row.RegionId)}}</p>
+            </template>
+          </el-table-column>
+          <el-table-column prop="CreationTime" label="有效期" sortable>
+            <template slot-scope="scope">
+              <p>{{local_time(scope.row.CreationTime)}}</p>
+              <p>{{local_time(scope.row.ExpiredTime)}}</p>
+            </template>
+          </el-table-column>
+          <el-table-column label="费用" sortable>
+            <template slot-scope="scope">
+              <p>包年￥{{scope.row.price_info.Price.TradePrice}}</p>
+            </template>
+          </el-table-column>
+          <el-table-column prop="Status" label="状态" width="100"></el-table-column>
+          <el-table-column label="操作" width="140">
+            <template slot-scope="scope">
+              <el-link @click="onShowEcsModify(scope.row)" class="el-icon-setting"> 配置</el-link>
+              <el-link type="primary" @click="onShowEcsDetail(scope.row)" class="el-icon-info">详情</el-link>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-dialog :close-on-click-modal="false" title="提示" :visible.sync="is_show_ecs_modify_dialog" width="400px"
+          id="ecs_modify_dialog">
+          <el-form ref="form" :model="ecs_modify_info" label-width="80px">
+            <el-form-item label="实例名称">
+              <el-input size="mini" clearable v-model="ecs_modify_info.InstanceName"></el-input>
+            </el-form-item>
+          </el-form>
+          <span slot="footer" class="dialog-footer">
+            <el-button size="mini" @click="is_show_ecs_modify_dialog = false">取 消</el-button>
+            <el-button size="mini" type="primary" @click="onEcsModifySubmit">确 定</el-button>
+          </span>
+        </el-dialog>
+        <!-- ecs监控 -->
+        <el-dialog :close-on-click-modal="false" title="提示" :visible.sync="is_show_ecs_monitor" width="90%"
+          id="ecs_monitor">
+          <el-tabs v-model="ecs_detail_tab" @tab-click="onChangeEcsDetailTab">
+            <el-tab-pane label="监控" name="monitor">
+              <div>
+                <el-date-picker size="mini" v-model="ecs_monitor_time" type="datetime" placeholder="选择日期时间"
+                  @change="onChangeEcsMonitorTime">
+                </el-date-picker>
+                <el-select size="mini" v-model="ecs_monitor_period" placeholder="请选择"
+                  @change="onChangeEcsMonitorPeriod">
+                  <el-option label="半天" :value="60"></el-option>
+                  <el-option label="3天" :value="600"></el-option>
+                  <el-option label="15天" :value="3600"></el-option>
+                </el-select>
+              </div>
+              <div id="ecs_cpu_chart" style="width:100%;height:400px;margin-top: 20px;"></div>
+              <div id="ecs_bandwidth_chart" style="width:100%;height:400px;"></div>
+              <div id="ecs_disk_chart" style="width:100%;height:400px;"></div>
+            </el-tab-pane>
+            <el-tab-pane label="端口" name="port">
+              <el-table :data="ecs_port_list" stripe id="ecs_port_table">
+                <el-table-column label="协议" width="180">
+                  <template slot-scope="scope">
+                    <p>{{scope.row.IpProtocol}}</p>
+                  </template>
+                </el-table-column>
+                <el-table-column label="端口范围" width="180">
+                  <template slot-scope="scope">
+                    <p>{{scope.row.PortRange}}</p>
+                  </template>
+                </el-table-column>
+
+                <el-table-column label="授权IP段" width="180">
+                  <template slot-scope="scope">
+                    <p>{{scope.row.SourceCidrIp}}</p>
+                  </template>
+                </el-table-column>
+                <el-table-column label="方向" width="180">
+                  <template slot-scope="scope">
+                    <p>{{{ingress:'入',egress:'出'}[scope.row.Direction]}}</p>
+                  </template>
+                </el-table-column>
+                <el-table-column label="规则" width="180">
+                  <template slot-scope="scope">
+                    <p>{{scope.row.Policy}}</p>
+                  </template>
+                </el-table-column>
+                <el-table-column label="备注">
+                  <template slot-scope="scope">
+                    <p>{{scope.row.Description}}</p>
+                  </template>
+                </el-table-column>
+                <el-table-column label="创建时间" width="180">
+                  <template slot-scope="scope">
+                    <p>{{local_time(scope.row.CreateTime)}}</p>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+            <el-tab-pane label="磁盘" name="disk">
+              <el-table :data="ecs_disk_list" stripe id="ecs_disk_table">
+                <el-table-column label="磁盘id" width="180" prop="DiskId"> </el-table-column>
+                <el-table-column label="类型" prop="Type"> </el-table-column>
+                <el-table-column label="大小">
+                  <template slot-scope="scope">
+                    <p>{{scope.row.Size}}G</p>
+                  </template>
+                </el-table-column>
+
+                <el-table-column label="性能">
+                  <template slot-scope="scope">
+                    <p>等级：{{scope.row.PerformanceLevel}}</p>
+                    <p>读写：{{scope.row.IOPS}}次/s</p>
+                  </template>
+                </el-table-column>
+
+                <el-table-column label="到期时间">
+                  <template slot-scope="scope">
+                    <p>{{local_time(scope.row.ExpiredTime)}}</p>
+                  </template>
+                </el-table-column>
+                <el-table-column label="状态" width="100" prop="Status"> </el-table-column>
+              </el-table>
+            </el-tab-pane>
+
+          </el-tabs>
+          <span slot="footer" class="dialog-footer">
+            <el-button size="mini" @click="is_show_ecs_monitor = false">取 消</el-button>
+            <el-button size="mini" type="primary" @click="is_show_ecs_monitor = false">确 定</el-button>
+          </span>
+        </el-dialog>
+      </el-tab-pane>
+      <el-tab-pane label="RDS" name="rds" id="main_rds_tab" v-if="is_aliyun_enable&&is_rds_enable">
+        <el-table :data="group_instance_list.rds" stripe id="rds_table">
+          <el-table-column label="实例ID" width="180">
+            <template slot-scope="scope">
+              <p>{{scope.row.DBInstanceId}}</p>
+              <p>{{scope.row.DBInstanceDescription}}</p>
+            </template>
+          </el-table-column>
+          <el-table-column label="规格详情">
+            <template slot-scope="scope">
+              <p>{{scope.row.DBInstanceClass}}</p>
+              <p>{{scope.row.DBInstanceCPU}}核{{scope.row.DBInstanceMemory/1024}}G</p>
+              <p>存储: {{scope.row.DBInstanceStorage}}G</p>
+            </template>
+          </el-table-column>
+          <el-table-column label="引擎" width="180">
+            <template slot-scope="scope">
+              <p>{{scope.row.Engine}}{{scope.row.EngineVersion}}</p>
+            </template>
+          </el-table-column>
+          <el-table-column prop="RegionId" label="地域" width="180">
+            <template slot-scope="scope">
+              <p>{{getRegionTitle(scope.row.RegionId)}}</p>
+            </template>
+          </el-table-column>
+          <el-table-column label="性能">
+            <template slot-scope="scope">
+              <p>连接数：{{scope.row.MaxConnections}}</p>
+              <p>IO次数：{{scope.row.MaxIOPS}}</p>
+              <p>IO吞吐：{{scope.row.MaxIOMBPS}}MB/s</p>
+            </template>
+          </el-table-column>
+          <el-table-column prop="CreateTime" label="有效期">
+            <template slot-scope="scope">
+              <p>{{local_time(scope.row.CreationTime)}}</p>
+              <p>{{local_time(scope.row.ExpireTime)}}</p>
+            </template>
+          </el-table-column>
+          <el-table-column label="费用">
+            <template slot-scope="scope">
+              <p>包年￥{{scope.row.price_info.TradePrice}}</p>
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="DBInstanceStatus" label="状态" width="100"></el-table-column>
+          <el-table-column label="操作" width="140">
+            <template slot-scope="scope">
+              <el-link @click="onShowRdsModify(scope.row)" class="el-icon-setting"> 配置</el-link>
+              <el-link type="primary" @click="onShowRdsDetail(scope.row)" class="el-icon-info">详情</el-link>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-dialog :close-on-click-modal="false" title="提示" :visible.sync="is_show_rds_modify_dialog" width="400px"
+          id="rds_modify_dialog">
+          <el-form ref="form" :model="rds_modify_info" label-width="80px">
+            <el-form-item label="实例名称">
+              <el-input size="mini" clearable v-model="rds_modify_info.DBInstanceDescription"></el-input>
+            </el-form-item>
+          </el-form>
+          <span slot="footer" class="dialog-footer">
+            <el-button size="mini" @click="is_show_rds_modify_dialog = false">取 消</el-button>
+            <el-button size="mini" type="primary" @click="onRdsModifySubmit">确 定</el-button>
+          </span>
+        </el-dialog>
+        <el-dialog :close-on-click-modal="false" title="提示" :visible.sync="is_show_rds_monitor" width="90%"
+          id="rds_monitor">
+          <el-tabs v-model="rds_detail_tab" @tab-click="onChangeRdsDetailTab">
+            <el-tab-pane label="监控" name="monitor">
+              <div style="margin-bottom:20px;">
+                <el-select size="mini" v-model="rds_query_day" placeholder="请选择" @change="onChangeRdsQueryDay">
+                  <el-option :label="item.label" :value="item.value" v-for="(item,index) in rds_query_day_list">
+                  </el-option>
+                </el-select>
+                <el-date-picker size="mini" v-model="rds_query_time" @change="onChangeRdsQueryTime" type="datetimerange"
+                  range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期">
+                </el-date-picker>
+              </div>
+              <div :id="'rds_chart_'+item" style="width:100%;height:400px;" v-for="(item,index) in rds_chart_key_list"
+                :key="index"></div>
+            </el-tab-pane>
+            <el-tab-pane label="连接地址" name="connection">
+              <el-table v-if="rds_connection_data.DBInstanceNetInfos"
+                :data="rds_connection_data.DBInstanceNetInfos.DBInstanceNetInfo" stripe id="rds_connection_table">
+                <el-table-column label="链接地址" prop="ConnectionString"></el-table-column>
+                <el-table-column label="IP" prop="IPAddress" width="200"></el-table-column>
+                <el-table-column label="端口" prop="Port" width="100"></el-table-column>
+                <el-table-column label="类型" prop="IPType" width="100"></el-table-column>
+              </el-table>
+            </el-tab-pane>
+            <el-tab-pane label="慢日志" name="slow_records">
+              <el-table v-if="slow_log_data.Items" :data="slow_log_data.Items.SQLSlowLog" stripe
+                id="rds_slow_log_table">
+                <el-table-column label="SQL" prop="SQLText"></el-table-column>
+                <el-table-column label="数据库" prop="DBName" width="180"></el-table-column>
+                <el-table-column label="返回行数" prop="ReturnMaxRowCount" width="100"></el-table-column>
+                <el-table-column label="影响行数" prop="TotalRowsAffectedCounts" width="100"></el-table-column>
+                <el-table-column label="锁定时间(秒)" prop="TotalLockTimes" width="100"></el-table-column>
+                <el-table-column label="执行时间(秒)" prop="MaxExecutionTime" width="100"></el-table-column>
+                <el-table-column label="执行次数" prop="MySQLTotalExecutionCounts" width="100"></el-table-column>
+                <el-table-column label="创建时间" prop="CreateTime" width="100"></el-table-column>
+                <el-table-column label="操作" width="100">
+                  <template slot-scope="scope">
+                    <el-link type="primary" @click="onShowRdsSlowDetail(scope.row)">详情</el-link>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <el-pagination layout="prev, pager, next" :total="slow_log_data.TotalRecordCount"
+                :page-size="slow_log_data.PageRecordCount" @current-change="onRdsSlowLogPage">
+              </el-pagination>
+            </el-tab-pane>
+            <el-tab-pane label="存储" name="storage">
+              <el-table :data="rds_storage_info" stripe id="rds_storage_info_table">
+                <el-table-column label="名称" prop="name" width="200"></el-table-column>
+                <el-table-column label="值" prop="value" width="200"></el-table-column>
+                <el-table-column label="解释">
+                  <template slot-scope="scope">
+                    <p v-if="scope.row.name=='BackupOssDataSize'">OSS中备份集的数据文件大小，单位：Byte。0表示没有数据。</p>
+                    <p v-if="scope.row.name=='DiskUsed'">已用空间（DataSize+LogSize），单位：Byte。-1表示没有数据。</p>
+                    <p v-if="scope.row.name=='ArchiveBackupSize'">归档备份的占用空间，单位：Byte。</p>
+                    <p v-if="scope.row.name=='BackupOssLogSize'">OSS中备份集的日志文件大小，单位：Byte。0表示没有数据。</p>
+                    <p v-if="scope.row.name=='BackupLogSize'">日志备份的占用空间（不包括归档备份），单位：Byte。</p>
+                    <p v-if="scope.row.name=='BackupDataSize'">数据备份的占用空间（不包括归档备份），单位：Byte。</p>
+                    <p v-if="scope.row.name=='ColdBackupSize'">冷备份的占用空间，单位：Byte。-1表示没有数据。</p>
+                    <p v-if="scope.row.name=='DataSize'">数据文件占用空间，单位：Byte。-1表示没有数据。</p>
+                    <p v-if="scope.row.name=='PaidBackupSize'">扣除免费额度后，需要付费的备份占用空间，单位：Byte。</p>
+                    <p v-if="scope.row.name=='LogSize'">日志占用空间，单位：Byte。-1表示没有数据。</p>
+                    <p v-if="scope.row.name=='BackupSize'">备份占用空间，单位：Byte。-1表示没有数据。</p>
+                    <p v-if="scope.row.name=='SQLSize'">SQL的占用空间，单位：Byte。-1表示没有数据。</p>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+            <el-tab-pane label="IP白名单" name="ip_white_list">
+              <el-table :data="rds_ip_white_list" stripe id="rds_params_table">
+                <el-table-column label="名称" prop="DBInstanceIPArrayName" width="200"></el-table-column>
+                <el-table-column label="IP列表" prop="SecurityIPList">
+                  <template slot-scope="scope">
+                    {{scope.row.SecurityIPList.replaceAll(',',",&nbsp;&nbsp;&nbsp;&nbsp;")}}
+                  </template>
+                </el-table-column>
+                <el-table-column label="类型" prop="SecurityIPType" width="180"></el-table-column>
+              </el-table>
+            </el-tab-pane>
+            <el-tab-pane label="参数" name="params">
+              <el-table :data="rds_db_params" stripe id="rds_params_table">
+                <el-table-column label="参数名" prop="ParameterName" width="200"></el-table-column>
+                <el-table-column label="参数值" prop="ParameterValue" width="400"></el-table-column>
+                <el-table-column label="解释" prop="ParameterDescription"></el-table-column>
+              </el-table>
+            </el-tab-pane>
+            <el-tab-pane label="账户" name="account">
+              <el-table :data="rds_account_list" stripe id="rds_account_table">
+                <el-table-column label="账户名" prop="AccountName" width="200"></el-table-column>
+                <el-table-column label="类型" prop="AccountType" width="400"></el-table-column>
+                <el-table-column label="状态" prop="AccountStatus"></el-table-column>
+              </el-table>
+            </el-tab-pane>
+            <el-tab-pane label="备份" name="backup">
+              <el-table :data="rds_backup_list" stripe id="rds_backup_table">
+                <el-table-column label="备份时间">
+                  <template slot-scope="scope">
+                    {{local_time(scope.row.BackupStartTime)}}~{{local_time(scope.row.BackupEndTime)}}
+                  </template>
+                </el-table-column>
+                <el-table-column label="备份类型" prop="BackupMethod"></el-table-column>
+                <el-table-column label="备份类型" prop="BackupType"></el-table-column>
+                <el-table-column label="备份大小">
+                  <template slot-scope="scope">
+                    {{formatStorage(scope.row.BackupSize)}}
+                  </template>
+                </el-table-column>
+                <el-table-column label="状态" prop="BackupStatus"></el-table-column>
+              </el-table>
+            </el-tab-pane>
+
+          </el-tabs>
+          <span slot="footer" class="dialog-footer">
+            <el-button size="mini" @click="is_show_rds_monitor = false">取 消</el-button>
+            <el-button size="mini" type="primary" @click="is_show_rds_monitor = false">确 定</el-button>
+          </span>
+        </el-dialog>
+      </el-tab-pane>
+      <el-tab-pane label="OSS" name="oss" id="main_oss_tab" v-if="is_aliyun_enable&&is_oss_enable">
+        <el-table :data="oss_bucket_list" stripe id="oss_table">
+          <el-table-column label="名称" width="180" prop="Bucket.Name"></el-table-column>
+          <el-table-column label="外网地址">
+            <template slot-scope="scope">
+              {{scope.row.Bucket.Name}}.oss-{{scope.row.Bucket.Location}}.aliyuncs.com
+            </template>
+          </el-table-column>
+          <el-table-column label="存储">
+            <template slot-scope="scope">
+              <p>{{formatStorage(scope.row.Stat.Storage)}}</p>
+            </template>
+          </el-table-column>
+          <el-table-column label="文件个数">
+            <template slot-scope="scope">
+              <p>{{scope.row.Stat.ObjectCount}}</p>
+            </template>
+          </el-table-column>
+          <el-table-column label="镜像回源">
+            <template slot-scope="scope">
+              <p v-for="(mirror,idx) in scope.row.mirror_list" :key="idx">{{mirror.url}}</p>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="创建时间" width="200">
+            <template slot-scope="scope">
+              {{local_time(scope.row.Bucket.CreationDate)}}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="140">
+            <template slot-scope="scope">
+              <el-link type="primary" @click="onShowOssDetail(scope.row)" class="el-icon-info">详情</el-link>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-dialog :close-on-click-modal="false" title="提示" :visible.sync="is_show_oss_detail" width="90%"
+          id="oss_detail_dialog">
+          <el-tabs v-model="oss_detail_tab" @tab-click="onChangeOssDetailTab">
+            <el-tab-pane label="监控" name="monitor">
+              <div id="oss_request_chart" style="width:100%;height:400px;margin-top: 20px;"></div>
+              <div id="oss_bandwidth_chart" style="width:100%;height:400px;"></div>
+            </el-tab-pane>
+          </el-tabs>
+          <span slot="footer" class="dialog-footer">
+            <el-button size="mini" @click="is_show_oss_detail = false">取 消</el-button>
+            <el-button size="mini" type="primary" @click="is_show_oss_detail = false">确 定</el-button>
+          </span>
+        </el-dialog>
+      </el-tab-pane>
+      <el-tab-pane label="短信" name="sms" id="main_sms_tab" v-if="is_aliyun_enable">
+        <el-tabs v-model="sms_tab" @tab-click="onChangeSmsTab">
+          <el-tab-pane label="模板" name="template">
+            <el-table :data="sms_template_list" stripe id="sms_template_table">
+              <el-table-column label="模板名称" width="180" prop="TemplateName"></el-table-column>
+              <el-table-column label="模板内容" prop="TemplateContent"></el-table-column>
+              <el-table-column label="模板code" width="180" prop="TemplateCode"></el-table-column>
+              <el-table-column label="审核状态" width="180" prop="AuditStatus"></el-table-column>
+              <el-table-column label="创建时间" width="180" prop="CreateDate"></el-table-column>
+            </el-table>
+          </el-tab-pane>
+          <el-tab-pane label="签名" name="sign">
+            <el-table :data="sms_sign_list" stripe id="sms_sign_table">
+              <el-table-column label="签名名称" prop="SignName"></el-table-column>
+              <el-table-column label="业务类型" width="180" prop="BusinessType"></el-table-column>
+              <el-table-column label="审核状态" width="180" prop="AuditStatus"></el-table-column>
+              <el-table-column label="创建时间" width="180" prop="CreateDate"></el-table-column>
+            </el-table>
+          </el-tab-pane>
+          <el-tab-pane label="统计" name="chart">
+            <div id="sms_chart" style="width:100%;height:400px;"></div>
+          </el-tab-pane>
+        </el-tabs>
+      </el-tab-pane>
+      <el-tab-pane label="域名" name="domain" id="main_domain_tab" v-if="is_aliyun_enable">
+        <el-table :data="domain_list" stripe id="domain_table">
+          <el-table-column label="域名" prop="DomainName"></el-table-column>
+          <el-table-column label="实名认证" width="180" prop="DomainAuditStatus"></el-table-column>
+          <el-table-column label="注册时间" width="180" prop="RegistrationDate"></el-table-column>
+          <el-table-column label="到期时间" width="180" prop="ExpirationDate"></el-table-column>
+          <el-table-column label="注册类型" width="180" prop="ExpirationDate">
+            <template slot-scope="scope">
+              {{scope.row.RegistrantType==1?'个人':'企业'}}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="180">
+            <template slot-scope="scope">
+              <el-link type="primary" @click="onShowDomainDetail(scope.row)">详情</el-link>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-dialog :close-on-click-modal="false" title="提示" :visible.sync="is_show_domain_detail" width="90%"
+          id="domain_detail">
+          <el-tabs v-model="domain_detail_tab">
+            <el-tab-pane label="解析" name="resolve">
+              <el-table :data="domain_resolve_list" stripe id="domain_resolve_table">
+                <el-table-column label="记录类型" width="180" prop="Type" sortable></el-table-column>
+                <el-table-column label="主机记录" prop="RR"></el-table-column>
+                <el-table-column label="记录值" prop="Value"></el-table-column>
+                <el-table-column label="状态" width="180" prop="Status" sortable></el-table-column>
+              </el-table>
+            </el-tab-pane>
+          </el-tabs>
+          <span slot="footer" class="dialog-footer">
+            <el-button size="mini" @click="is_show_domain_detail = false">取 消</el-button>
+            <el-button size="mini" type="primary" @click="is_show_domain_detail = false">确 定</el-button>
+          </span>
+        </el-dialog>
+      </el-tab-pane>
+      <el-tab-pane label="费用" name="balance" id="main_bill_tab" v-if="is_aliyun_enable">
+        <el-row>
+          <el-col :span="6">
+            <p>账户余额：￥{{account_balance.AvailableAmount}}</p>
+          </el-col>
+        </el-row>
+        <div>
+          <el-tabs v-model="bill_tab" @tab-click="onChangeBillTab">
+            <el-tab-pane label="费用总览" name="bill_overview">
+              <el-table v-if="bill_overview_data.Data" :data="bill_overview_data.Data.Items.Item" stripe
+                id="bill_overview_table">
+                <el-table-column label="产品名" prop="ProductName"></el-table-column>
+                <el-table-column label="产品详情" prop="ProductDetail"></el-table-column>
+                <el-table-column label="应付金额" prop="PretaxAmount"></el-table-column>
+                <el-table-column label="订阅类型" width="100">
+                  <template slot-scope="scope">
+                    <p v-if="scope.row.SubscriptionType=='Subscription'">预付费</p>
+                    <p v-if="scope.row.SubscriptionType=='PayAsYouGo'">后付费</p>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+            <el-tab-pane label="订单列表" name="order_list">
+              <el-table v-if="order_list_data.Data" :data="order_list_data.Data.OrderList.Order" stripe
+                id="order_list_table">
+                <el-table-column label="订单id" prop="OrderId" width="150"></el-table-column>
+                <el-table-column label="产品名称" prop="ProductCode">
+                  <template slot-scope="scope">
+                    <p :title="scope.row.ProductCode">
+                      {{getProductName(scope.row.ProductCode,scope.row.ProductType,scope.row.SubscriptionType)}}
+                    </p>
+                  </template>
+                </el-table-column>
+                <el-table-column label="支付金额" prop="PretaxAmount"></el-table-column>
+                <el-table-column label="支付时间" prop="PaymentTime">
+                  <template slot-scope="scope">
+                    {{local_time(scope.row.PaymentTime)}}
+                  </template>
+                </el-table-column>
+                <el-table-column label="订阅类型" width="100">
+                  <template slot-scope="scope">
+                    <p v-if="scope.row.SubscriptionType=='Subscription'">预付费</p>
+                    <p v-if="scope.row.SubscriptionType=='PayAsYouGo'">后付费</p>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="140">
+                  <template slot-scope="scope">
+                    <el-link type="primary" @click="onShowOrderDetail(scope.row)" class="el-icon-info">详情</el-link>
+                  </template>
+                </el-table-column>
+              </el-table>
+
+              <el-dialog :close-on-click-modal="false" title="提示" :visible.sync="is_show_order_detail" width="60%"
+                id="order_detail">
+                <el-table :data="order_detail_data" stripe>
+                  <el-table-column label="名称" width="250" prop="name"></el-table-column>
+                  <el-table-column label="值" prop="value"></el-table-column>
+                </el-table>
+                <span slot="footer" class="dialog-footer">
+                  <el-button size="mini" @click="is_show_order_detail = false">取 消</el-button>
+                  <el-button size="mini" type="primary" @click="is_show_order_detail = false">确 定</el-button>
+                </span>
+              </el-dialog>
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+      </el-tab-pane>
+      <el-tab-pane label="全部资源" name="resource" id="main_resource_tab" v-if="is_aliyun_enable">
+        <el-table :data="instance_list" :default-sort="{prop: 'ProductCode', order: 'ascending'}">
+          <el-table-column prop="InstanceID" label="实例ID" width="180" sortable></el-table-column>
+          <el-table-column prop="ProductCode" label="产品代码" width="180" sortable></el-table-column>
+          <el-table-column prop="Region" label="地域" width="180" sortable>
+            <template slot-scope="scope">
+              <p>{{getRegionTitle(scope.row.Region)}}</p>
+            </template>
+          </el-table-column>
+          <el-table-column prop="CreateTime" label="有效时间">
+            <template slot-scope="scope">
+              <p>{{local_time(scope.row.CreateTime)}}</p>
+              <p>{{local_time(scope.row.EndTime)}}</p>
+            </template>
+          </el-table-column>
+          <el-table-column prop="RenewStatus" label="续费状态"></el-table-column>
+          <el-table-column prop="SubStatus" label="状态"></el-table-column>
+        </el-table>
+      </el-tab-pane>
+    </el-tabs>
+  </div>
+</body>
+<script>
+  let api_url = 'http://127.0.0.1:${{.port}}/'
+  if (api_url.indexOf('.port') > 0) {
+    api_url = 'http://127.0.0.1:20000/'
+  }
+  let aliyun_time_format = 'yyyy-MM-ddThh:mm:ssZ'
+  let time_format = 'yyyy-MM-dd hh:mm:ss'
+
+  window.onload = function () {
+    new Vue({
+      el: '#app',
+      data() {
+        return {
+          aliyun_data: {
+            product_list: []
+          },
+          is_aliyun_enable: false,
+          is_site_statics_enable: false,
+          loadingAnimation: null,
+          group_instance_list: {
+            ecs: []
+          },
+          resource_product_code_list: [],
+          instance_list: [],
+          resource_tab: 'site',
+          //网站业务统计
+          site_statics_data: [],
+          // ecs
+          is_ecs_enable: false,
+          is_show_ecs_monitor: false,
+          ecs_detail_tab: 'monitor',
+          ecs_monitor_time: '',
+          ecs_monitor_ecs: {},
+          ecs_monitor_period: 60,
+          ecs_port_list: [],
+          ecs_disk_list: [],
+          ecs_modify_info: {},
+          is_show_ecs_modify_dialog: false,
+          // rds
+          is_rds_enable: false,
+          loading: true,
+          is_show_rds_monitor: false,
+          rds_detail_tab: 'monitor',
+          rds_monitor_rds: {},
+          rds_db_params: [],
+          rds_ip_white_list: [],
+          rds_chart_key_list: [],
+          rds_query_time: [],
+          rds_query_day: 0,
+          rds_query_day_list: [],
+          slow_log_data: [],
+          rds_storage_info: [],
+          rds_connection_data: {},
+          rds_modify_info: {},
+          is_show_rds_modify_dialog: false,
+          rds_account_list:[],
+          rds_backup_list:[],
+          //oss
+          is_oss_enable: false,
+          oss_bucket_list: [],
+          is_show_oss_detail: false,
+          oss_detail_tab: 'monitor',
+          //域名
+          domain_list: [],
+          domain_resolve_list: [],
+          is_show_domain_detail: false,
+          domain_detail_tab: 'resolve',
+          //sms
+          sms_template_list: [],
+          sms_sign_list: [],
+          sms_tab: 'template',
+          sms_statics_data: [],
+          //费用
+          account_balance: [],
+          bill_overview_data: {},
+          order_list_data: {},
+          is_show_order_detail: false,
+          order_detail_data: {},
+          bill_tab: 'bill_overview',
+        }
+      },
+      async created() {
+        fetch(`${api_url}api/is_aliyun_enable`, {
+          method: "POST",
+          body: JSON.stringify({})
+        }).then(resp => resp.json()).then(resp => {
+          document.querySelector('#app').style="display:block"
+          if (resp.enable) {
+            this.is_aliyun_enable = true
+            this.loadResourceList('ecs')
+            this.loadAliyunData()
+          }
+        })
+        this.showLoading()
+        this.loadDbStatics()
+      },
+      methods: {
+        loadAliyunData() {
+          fetch(`${api_url}api/get_aliyun_data`, {
+            method: "POST",
+            body: JSON.stringify({})
+          }).then(resp => resp.json()).then(resp => {
+            this.aliyun_data = JSON.parse(resp)
+          })
+
+        },
+        /**
+         * 数据库统计
+         */
+        loadDbStatics() {
+          fetch(`${api_url}api/get_site_statics`, {
+            method: "POST",
+            body: JSON.stringify({})
+          }).then(resp => resp.json()).then(resp => {
+            this.hideLoading()
+            if (!resp) {
+              this.resource_tab = 'ecs'
+              return
+            }
+            this.is_site_statics_enable = true
+
+            this.site_statics_data = resp
+            setTimeout(() => {
+              resp.forEach(item => {
+                let xData = []
+                let yData = []
+                item.data = item.data || []
+                item.data.forEach(v => {
+                  xData.push(v.date)
+                  yData.push(v.value)
+                })
+                this.initLineChart(item.id, item.title, xData, {
+                  name: item.title,
+                  data: yData
+                })
+              })
+            }, 300)
+          }).catch(e => {
+            this.hideLoading()
+            this.resource_tab = 'ecs'
+          })
+        },
+        /**
+         *主界面
+         */
+        onChangeMainTab(e) {
+          let tab_name = e.name
+          if (['ecs', 'rds'].indexOf(tab_name)) {
+            this.loadResourceList(tab_name)
+          }
+          if (tab_name == 'domain') {
+            this.loadDomainList()
+          }
+          if (tab_name == 'oss') {
+            this.loadOssData()
+          }
+          if (tab_name == 'sms') {
+            this.loadSmsData()
+          }
+          if (tab_name == 'balance') {
+            this.loadAccountBalance()
+            this.loadBillOverview()
+          }
+        },
+        async loadResourceList(type) {
+          this.group_instance_list[type] = []
+          let instance_list = []
+          let resource_product_code_list = []
+          while (true) {
+            let response = await fetch(`${api_url}api/get_resource_list`, {
+              method: "POST",
+              body: JSON.stringify({
+                PageSize: "100"
+              })
+            })
+            response = await response.json()
+            // console.log(response)
+            for (let i = 0; i < response.Data.InstanceList.length; i++) {
+              let item = response.Data.InstanceList[i]
+              let ProductCode = item.ProductCode
+              let InstanceID = item.InstanceID
+              let RegionId = this.getRegionId(item.Region)
+
+              if (resource_product_code_list.indexOf(ProductCode) == -1) {
+                resource_product_code_list.push(ProductCode)
+              }
+              this.is_ecs_enable = resource_product_code_list.indexOf('ecs') > -1
+              this.is_rds_enable = resource_product_code_list.indexOf('rds') > -1
+              this.is_oss_enable = resource_product_code_list.indexOf('oss') > -1
+
+              if (ProductCode != type) {
+                continue
+              }
+              if (ProductCode == 'ecs') {
+                fetch(`${api_url}api/get_ecs_info`, {
+                  method: "POST",
+                  body: JSON.stringify({
+                    InstanceIds: JSON.stringify([InstanceID]),
+                    RegionId
+                  })
+                }).then(resp => resp.json()).then(resp => {
+                  if (resp.Instances.Instance.length > 0) {
+                    let instance_info = resp.Instances.Instance[0]
+                    fetch(`${api_url}api/get_ecs_price`, {
+                      method: "POST",
+                      body: JSON.stringify({
+                        ResourceId: InstanceID,
+                        RegionId,
+                        PriceUnit: 'Year',
+                      })
+                    }).then(price_response => price_response.json()).then(price_response => {
+                      instance_info.price_info = price_response.PriceInfo
+                      this.group_instance_list.ecs.push(instance_info)
+                    })
+                  }
+                })
+              }
+              if (ProductCode == 'rds') {
+                fetch(`${api_url}api/get_rds_info`, {
+                  method: "POST",
+                  body: JSON.stringify({
+                    DBInstanceId: InstanceID,
+                    RegionId
+                  })
+                }).then(instance_response => instance_response.json()).then(instance_response => {
+                  if (instance_response.Items.DBInstanceAttribute.length > 0) {
+                    let instance_info = instance_response.Items.DBInstanceAttribute[0]
+                    fetch(`${api_url}api/get_rds_price`, {
+                      method: "POST",
+                      body: JSON.stringify({
+                        DBInstanceId: InstanceID,
+                        RegionId,
+                        UsedTime: 1,
+                        TimeType: 'Year',
+                      })
+                    }).then(price_response => price_response.json()).then(price_response => {
+                      instance_info.price_info = price_response.PriceInfo
+                      this.group_instance_list.rds.push(instance_info)
+                    })
+                  }
+                })
+              }
+            }
+            instance_list = [...instance_list, ...response.Data.InstanceList]
+            if (response.Data.InstanceList.length < response.Data.PageSize) {
+              break;
+            }
+          }
+          this.instance_list = instance_list
+        },
+        /*
+         * ecs
+         */
+        onShowEcsDetail(e) {
+          this.is_show_ecs_monitor = true
+          this.ecs_monitor_ecs = e
+          this.ecs_monitor_time = new Date().format(time_format)
+          this.ecs_monitor_period = 600
+          // this.loadEcsMonitorData(e, new Date().format(time_format), 3600)
+          this.loadEcsMonitorData(e, '2022-07-30 23:00:00', 600)
+        },
+        onChangeEcsMonitorTime(e) {
+          this.ecs_monitor_time = new Date(e).format(time_format)
+          this.loadEcsMonitorData()
+        },
+        onChangeEcsMonitorPeriod(e) {
+          this.ecs_monitor_period = e
+          this.loadEcsMonitorData()
+        },
+        onShowEcsModify(e) {
+          this.ecs_modify_info = {
+            ...e
+          }
+          this.is_show_ecs_modify_dialog = true
+        },
+        onEcsModifySubmit() {
+          this.is_show_ecs_modify_dialog = false
+          fetch(`${api_url}api/ecs_modify_attribute`, {
+            method: "POST",
+            body: JSON.stringify({
+              RegionId: this.getRegionId(this.ecs_modify_info.RegionId),
+              InstanceId: this.ecs_modify_info.InstanceId,
+              InstanceName: this.ecs_modify_info.InstanceName,
+            })
+          }).then(resp => resp.json()).then(resp => {
+            this.loadResourceList('ecs')
+          })
+        },
+        loadEcsMonitorData() {
+          e = this.ecs_monitor_ecs
+          end_time = this.ecs_monitor_time
+          Period = this.ecs_monitor_period
+          //Period取值范围60、600、3600
+          let period_list = [60, 600, 3600]
+          let EndTime = this.aliyun_time(end_time)
+          let StartTime = this.aliyun_time((new Date(end_time).getTime() / 1000 - Period * 400) * 1000)
+          fetch(`${api_url}api/get_ecs_monitor_info`, {
+            method: "POST",
+            body: JSON.stringify({
+              RegionId: this.getRegionId(e.RegionId),
+              InstanceId: e.InstanceId,
+              StartTime,
+              EndTime,
+              Period,
+            })
+          }).then(resp => resp.json()).then(resp => {
+            // cpu
+            let cpu_x_data = []
+            let cpu_y_data = []
+            resp.MonitorData.InstanceMonitorData.forEach(item => {
+              cpu_x_data.push(this.local_time(item.TimeStamp))
+              cpu_y_data.push(item.CPU)
+            })
+            this.initLineChart('ecs_cpu_chart', 'CPU', cpu_x_data, {
+              name: 'cpu(%)',
+              data: cpu_y_data
+            })
+
+            //带宽
+            let bandwidth_x_data = []
+            let bandwidth_y_data = []
+            resp.MonitorData.InstanceMonitorData.forEach(item => {
+              bandwidth_x_data.push(this.local_time(item.TimeStamp))
+              bandwidth_y_data.push(item.InternetBandwidth)
+            })
+            this.initLineChart('ecs_bandwidth_chart', '带宽', bandwidth_x_data, {
+              name: '带宽(kbits/s)',
+              data: bandwidth_y_data
+            })
+            //硬盘读写
+            let disk_x_data = []
+            let disk_read_data = []
+            let disk_write_data = []
+            resp.MonitorData.InstanceMonitorData.forEach(item => {
+              disk_x_data.push(this.local_time(item.TimeStamp))
+              disk_read_data.push(item.BPSRead)
+              disk_write_data.push(item.BPSWrite)
+            })
+            this.initMultilineChart('ecs_disk_chart', '硬盘读写', disk_x_data, [{
+                name: '读(Byte/s)',
+                data: disk_read_data
+              },
+              {
+                name: '写(Byte/s)',
+                data: disk_write_data
+              }
+            ])
+
+          })
+        },
+        onChangeEcsDetailTab(e) {
+          let tab_name = e.name
+
+          if (e.name == 'monitor') {
+            this.loadEcsMonitorData()
+          }
+          if (e.name == 'port') {
+            fetch(`${api_url}api/get_ecs_port_list`, {
+              method: "POST",
+              body: JSON.stringify({
+                RegionId: this.getRegionId(this.ecs_monitor_ecs.RegionId),
+                SecurityGroupId: this.ecs_monitor_ecs.SecurityGroupIds.SecurityGroupId[0],
+              })
+            }).then(resp => resp.json()).then(resp => {
+              this.ecs_port_list = resp.Permissions.Permission
+            })
+          }
+          if (e.name == 'disk') {
+            fetch(`${api_url}api/get_ecs_disk_list`, {
+              method: "POST",
+              body: JSON.stringify({
+                RegionId: this.getRegionId(this.ecs_monitor_ecs.RegionId),
+                InstanceId: this.ecs_monitor_ecs.InstanceId,
+              })
+            }).then(resp => resp.json()).then(resp => {
+              this.ecs_disk_list=resp.Disks.Disk
+            })
+          }
+        },
+        /*
+         *rds
+         */
+        onShowRdsDetail(e) {
+          this.is_show_rds_monitor = true
+          this.rds_monitor_rds = e
+          this.rds_query_time = [new Date(new Date().getTime() - 3600 * 24 * 1000), new Date()]
+          this.rds_query_day_list = [{
+            label: '1小时',
+            value: 60 * 60
+          }, {
+            label: '3小时',
+            value: 60 * 60 * 3
+          }, {
+            label: '6小时',
+            value: 60 * 60 * 6
+          }, {
+            label: '1天',
+            value: 60 * 60 * 24
+          }, {
+            label: '3天',
+            value: 60 * 60 * 24 * 3
+          }, {
+            label: '7天',
+            value: 60 * 60 * 24 * 7
+          }, {
+            label: '1月',
+            value: 60 * 60 * 24 * 30
+          }, {
+            label: '3月',
+            value: 60 * 60 * 24 * 30 * 3
+          }, {
+            label: '6月',
+            value: 60 * 60 * 24 * 30 * 6
+          }, {
+            label: '1年',
+            value: 60 * 60 * 24 * 365
+          }]
+          this.rds_query_day = 60 * 60 * 24
+          this.loadRdsMonitorData()
+        },
+        onChangeRdsDetailTab(e) {
+          let tab_name = e.name
+          if (tab_name == 'monitor') {
+            this.loadRdsMonitorData()
+          }
+          if (tab_name == 'params') {
+            fetch(`${api_url}api/get_rds_params`, {
+              method: "POST",
+              body: JSON.stringify({
+                DBInstanceId: this.rds_monitor_rds.DBInstanceId,
+                RegionId: this.getRegionId(this.rds_monitor_rds.RegionId),
+              })
+            }).then(resp => resp.json()).then(resp => {
+              this.rds_db_params = resp.RunningParameters.DBInstanceParameter
+            })
+          }
+          if (tab_name == 'slow_records') {
+            this.loadRdsSlowLogList(1)
+          }
+          if (tab_name == 'ip_white_list') {
+            fetch(`${api_url}api/get_rds_ip_white_list`, {
+              method: "POST",
+              body: JSON.stringify({
+                DBInstanceId: this.rds_monitor_rds.DBInstanceId,
+                RegionId: this.getRegionId(this.rds_monitor_rds.RegionId),
+              })
+            }).then(resp => resp.json()).then(resp => {
+              this.rds_ip_white_list = resp.Items.DBInstanceIPArray
+            })
+          }
+          if (tab_name == 'account') {
+            fetch(`${api_url}api/get_rds_account_list`, {
+              method: "POST",
+              body: JSON.stringify({
+                DBInstanceId: this.rds_monitor_rds.DBInstanceId,
+                RegionId: this.getRegionId(this.rds_monitor_rds.RegionId),
+                PageNumber:1,
+                PageSize:100,
+              })
+            }).then(resp => resp.json()).then(resp => {
+              this.rds_account_list=resp.Accounts.DBInstanceAccount
+            })
+          }
+          if (tab_name == 'backup') {
+            fetch(`${api_url}api/get_rds_backup_list`, {
+              method: "POST",
+              body: JSON.stringify({
+                DBInstanceId: this.rds_monitor_rds.DBInstanceId,
+                RegionId: this.getRegionId(this.rds_monitor_rds.RegionId),
+                PageNumber:1,
+                PageSize:100,
+              })
+            }).then(resp => resp.json()).then(resp => {
+              this.rds_backup_list=resp.Items.Backup
+            })
+          }
+
+          if (tab_name == 'storage') {
+            this.loadRdsStorageInfo()
+          }
+          if (tab_name == 'connection') {
+            this.loadRdsConnectionList()
+          }
+
+        },
+        loadRdsSlowLogList(PageNumber) {
+          fetch(`${api_url}api/get_rds_slow_log_list`, {
+            method: "POST",
+            body: JSON.stringify({
+              DBInstanceId: this.rds_monitor_rds.DBInstanceId,
+              PageNumber,
+              RegionId: this.getRegionId(this.rds_monitor_rds.RegionId),
+              StartTime: this.aliyun_time(new Date().getTime() - 3600 * 24 * 30 * 1000).substr(0, 10) +
+                'Z',
+              EndTime: this.aliyun_time(new Date()).substr(0, 10) + 'Z',
+              PageSize: 30,
+            })
+          }).then(resp => resp.json()).then(resp => {
+            this.slow_log_data = resp
+          })
+        },
+        loadRdsStorageInfo(e) {
+          fetch(`${api_url}api/get_rds_storage_info`, {
+            method: "POST",
+            body: JSON.stringify({
+              RegionId: 'cn-hangzhou',
+              DBInstanceId: this.rds_monitor_rds.DBInstanceId,
+            })
+          }).then(resp => resp.json()).then(resp => {
+            this.rds_storage_info = []
+            for (let i in resp) {
+              if (['RequestId', 'DBInstanceId', 'Engine'].indexOf(i) > -1) {
+                continue
+              }
+              this.rds_storage_info.push({
+                name: i,
+                value: typeof resp[i] == 'number' ? this.formatStorage(resp[i]) : resp[i],
+              })
+            }
+          })
+        },
+        loadRdsConnectionList(e) {
+          fetch(`${api_url}api/get_rds_connection_list`, {
+            method: "POST",
+            body: JSON.stringify({
+              RegionId: 'cn-hangzhou',
+              DBInstanceId: this.rds_monitor_rds.DBInstanceId,
+            })
+          }).then(resp => resp.json()).then(resp => {
+            this.rds_connection_data = resp
+          })
+        },
+        loadRdsMonitorData() {
+          let key_text =
+            `MySQL_MemCpuUsage:CPU、内存使用率
+MySQL_NetworkTraffic:输入、输出流量(KB)
+MySQL_QPSTPS:SQL行次数、事务数
+MySQL_Sessions:当前活跃连接数、总连接数
+MySQL_IOPS:IO请求次数`;
+          let key_list = []
+          let key_data = {}
+
+          key_text.split("\n").forEach(item => {
+            let res = item.split(':')
+            key_list.push(res[0])
+            key_data[res[0]] = res[1]
+          })
+          this.rds_chart_key_list = []
+          fetch(`${api_url}api/get_rds_monitor_data`, {
+            method: "POST",
+            body: JSON.stringify({
+              DBInstanceId: this.rds_monitor_rds.DBInstanceId,
+              RegionId: this.getRegionId(this.rds_monitor_rds.RegionId),
+              Key: key_list.join(','),
+              StartTime: this.aliyun_time(this.rds_query_time[0]).substr(0, 16) + 'Z',
+              EndTime: this.aliyun_time(this.rds_query_time[1]).substr(0, 16) + 'Z',
+            })
+          }).then(resp => resp.json()).then(resp => {
+            if (!resp.PerformanceKeys.PerformanceKey) return this.rds_chart_key_list = []
+            this.rds_chart_key_list = key_list
+            setTimeout(() => {
+              resp.PerformanceKeys.PerformanceKey.forEach(item => {
+                let title_list = item.ValueFormat.split('&')
+                let x_data = []
+                let y_data = []
+                title_list.forEach(title => {
+                  y_data.push({
+                    name: title,
+                    data: [],
+                  })
+                })
+                item.Values.PerformanceValue.forEach(val => {
+                  x_data.push(this.local_time(val.Date))
+                  let res = val.Value.split('&')
+                  res.forEach((v, v_idx) => {
+                    y_data[v_idx].data.push(v)
+                  })
+                })
+                this.initMultilineChart('rds_chart_' + item.Key, key_data[item.Key], x_data, y_data)
+              })
+            }, 100)
+          })
+        },
+        onChangeRdsQueryTime(e) {
+          this.rds_query_time = [this.local_time(e[0]), this.local_time(e[1])]
+          this.loadRdsMonitorData()
+        },
+        onChangeRdsQueryDay(e) {
+          this.rds_query_time = [new Date(new Date().getTime() - e * 1000), new Date()]
+          this.loadRdsMonitorData()
+        },
+        onShowRdsSlowDetail(e) {
+
+        },
+        onRdsSlowLogPage(e) {
+          this.loadRdsSlowLogList(e)
+        },
+        onShowRdsModify(e) {
+          this.rds_modify_info = {
+            ...e
+          }
+          this.is_show_rds_modify_dialog = true
+        },
+        onRdsModifySubmit() {
+          this.is_show_rds_modify_dialog = false
+          fetch(`${api_url}api/modify_rds_description`, {
+            method: "POST",
+            body: JSON.stringify({
+              RegionId: this.getRegionId(this.rds_modify_info.region - id),
+              DBInstanceId: this.rds_modify_info.DBInstanceId,
+              DBInstanceDescription: this.rds_modify_info.DBInstanceDescription,
+            })
+          }).then(resp => resp.json()).then(resp => {
+            this.loadResourceList('rds')
+          })
+        },
+        /*
+         * oss
+         */
+        onShowOssDetail(e) {
+          this.is_show_oss_detail = true
+
+          this.loadOssStatics({
+            MetricName: 'ValidRequestCount',
+            BucketName: e.Bucket.Name,
+            StartTime: this.aliyun_time(new Date().getTime() - 3600 * 24 * 31 * 1000),
+            EndTime: this.aliyun_time(new Date()),
+            cb: (data) => {
+              let xData = []
+              let yData = []
+              let total = 0
+              data.forEach(item => {
+                xData.push(new Date(item.timestamp).format(time_format))
+                yData.push(item.Value)
+                total += item.Value
+              })
+              this.initLineChart('oss_request_chart', `请求次数(共${total}次)`, xData, {
+                name: '请求次数',
+                data: yData
+              })
+            },
+          })
+          total = 0
+          this.loadOssStatics({
+            MetricName: 'InternetSend',
+            BucketName: e.Bucket.Name,
+            StartTime: this.aliyun_time(new Date().getTime() - 3600 * 24 * 31 * 1000),
+            EndTime: this.aliyun_time(new Date()),
+            cb: (data) => {
+              let xData = []
+              let yData = []
+              data.forEach(item => {
+                xData.push(new Date(item.timestamp).format(time_format))
+                yData.push((item.Value / (1024 * 1024)).toFixed(2))
+                total += item.Value
+              })
+              total = this.formatStorage(total)
+              this.initLineChart('oss_bandwidth_chart', `公网流量(单位M,共${total})`, xData, {
+                name: '公网流量',
+                data: yData
+              })
+            },
+          })
+
+        },
+        loadOssStatics({
+          MetricName,
+          BucketName,
+          NextToken,
+          StartTime,
+          EndTime,
+          cb,
+        }) {
+          //参考文档： https://help.aliyun.com/document_detail/31879.html
+          fetch(`${api_url}api/get_cms_metric_list`, {
+            method: "POST",
+            body: JSON.stringify({
+              RegionId: 'cn-hangzhou',
+              Namespace: 'acs_oss_dashboard',
+              MetricName,
+              Period: 900,
+              StartTime,
+              EndTime,
+              Dimensions: JSON.stringify([{
+                BucketName
+              }]),
+              NextToken,
+              Length: 1000,
+            })
+          }).then(resp => resp.json()).then(resp => {
+            cb(JSON.parse(resp.Datapoints))
+          })
+        },
+        onChangeOssDetailTab(e) {
+          let tab_name = e.name
+        },
+        loadOssData() {
+          fetch(`${api_url}api/get_oss_bucket_list`, {
+            method: "POST",
+            body: JSON.stringify({})
+          }).then(resp => resp.json()).then(resp => {
+            let oss_bucket_list = resp
+            oss_bucket_list.forEach(item => {
+              parser = new DOMParser();
+              xmlDoc = parser.parseFromString(item.ConfigXml, "text/xml")
+
+              let redirect_list = xmlDoc.getElementsByTagName("Redirect") || []
+              let mirror_list = []
+              for (let i = 0; i < redirect_list.length; i++) {
+                let redirect = redirect_list[i]
+                if (redirect.getElementsByTagName('RedirectType')[0].innerHTML != 'Mirror') {
+                  continue
+                }
+                mirror_list.push({
+                  url: redirect.getElementsByTagName('MirrorURL')[0].innerHTML,
+                })
+              }
+              item.mirror_list = mirror_list
+            })
+            this.oss_bucket_list = oss_bucket_list
+          })
+        },
+        /**
+         * 短信
+         */
+        onChangeSmsTab(e) {
+          let tab_name = e.name
+          if (tab_name == 'sign') {
+            fetch(`${api_url}api/get_sms_sign_list`, {
+              method: "POST",
+              body: JSON.stringify({
+
+              })
+            }).then(resp => resp.json()).then(resp => {
+              this.sms_sign_list = resp.SmsSignList
+            })
+          }
+          if (tab_name == 'chart') {
+            this.sms_statics_data = []
+            this.loadSmsStatics(new Date(new Date().getTime() - 24 * 3600 * 365 * 1000).format('yyyyMMdd'),
+              new Date().format('yyyyMMdd'), 1, () => {
+                let xData = []
+                let successData = []
+                let failData = []
+                let noResponseData = []
+                this.sms_statics_data.forEach(item => {
+                  xData.push(item.SendDate)
+                  successData.push(item.RespondedSuccessCount)
+                  failData.push(item.RespondedFailCount)
+                  noResponseData.push(item.NoRespondedCount)
+                })
+                this.initMultilineChart('sms_chart', '短信发送统计', xData, [{
+                    name: '成功',
+                    data: successData
+                  },
+                  {
+                    name: '失败',
+                    data: failData
+                  },
+                  {
+                    name: '无响应',
+                    data: noResponseData
+                  },
+                ])
+              })
+          }
+        },
+        loadSmsStatics(startDate, endDate, pageIndex, cb) {
+          fetch(`${api_url}api/get_sms_statics`, {
+            method: "POST",
+            body: JSON.stringify({
+              RegionId: 'cn-hangzhou',
+              PageIndex: pageIndex,
+              StartDate: startDate,
+              EndDate: endDate
+            })
+          }).then(resp => resp.json()).then(resp => {
+            this.sms_statics_data = [...this.sms_statics_data, ...resp.Data.TargetList]
+            if (resp.Data.TargetList.length >= 50) {
+              this.loadSmsStatics(startDate, endDate, pageIndex + 1, cb)
+            } else {
+              if (cb) cb()
+            }
+          })
+        },
+        loadSmsData() {
+          fetch(`${api_url}api/get_sms_template_list`, {
+            method: "POST",
+            body: JSON.stringify({
+
+            })
+          }).then(resp => resp.json()).then(resp => {
+            this.sms_template_list = resp.SmsTemplateList
+          })
+        },
+        /**
+         * 域名
+         */
+        onShowDomainDetail(e) {
+          this.is_show_domain_detail = true
+
+          fetch(`${api_url}api/get_domain_resolve_list`, {
+            method: "POST",
+            body: JSON.stringify({
+              DomainName: e.DomainName
+            })
+          }).then(resp => resp.json()).then(resp => {
+
+            this.domain_resolve_list = resp.DomainRecords.Record
+          })
+        },
+        loadDomainList() {
+          fetch(`${api_url}api/get_domain_list`, {
+            method: "POST",
+            body: JSON.stringify({})
+          }).then(resp => resp.json()).then(resp => {
+
+            this.domain_list = resp.Data.Domain
+          })
+        },
+
+        /**
+         * 费用
+         */
+        loadAccountBalance() {
+          fetch(`${api_url}api/get_account_balance`, {
+            method: "POST",
+            body: JSON.stringify({
+              RegionId: 'cn-hangzhou'
+            })
+          }).then(resp => resp.json()).then(resp => {
+            this.account_balance = resp.Data
+          })
+        },
+        loadBillOverview() {
+          fetch(`${api_url}api/get_bill_overview`, {
+            method: "POST",
+            body: JSON.stringify({
+              RegionId: 'cn-hangzhou',
+              BillingCycle: new Date().format('yyyy-MM')
+            })
+          }).then(resp => resp.json()).then(resp => {
+            this.bill_overview_data = resp
+          })
+        },
+        loadOrderList() {
+          fetch(`${api_url}api/get_order_list`, {
+            method: "POST",
+            body: JSON.stringify({
+              RegionId: 'cn-hangzhou',
+              CreateTimeStart: this.aliyun_time(new Date().getTime() - 3600 * 24 * 365 * 1000),
+              CreateTimeEnd: this.aliyun_time(new Date()),
+              PaymentStatus: 'Paid',
+              PageNum: 1,
+              PageSize: 100,
+            })
+          }).then(resp => resp.json()).then(resp => {
+            this.order_list_data = resp
+          })
+
+        },
+        onShowOrderDetail(e) {
+          this.is_show_order_detail = true
+          this.order_detail_data = []
+          fetch(`${api_url}api/get_order_detail`, {
+            method: "POST",
+            body: JSON.stringify({
+              RegionId: 'cn-hangzhou',
+              OrderId: e.OrderId,
+            })
+          }).then(resp => resp.json()).then(resp => {
+            let order = resp.Data.OrderList.Order[0]
+
+            this.order_detail_data.push({
+              name: '应用实例',
+              value: JSON.parse(order.InstanceIDs).join(',  ')
+            })
+            this.order_detail_data.push({
+              name: '服务有效期',
+              value: this.local_time(order.UsageStartTime) + '~' + this.local_time(order.UsageEndTime)
+            })
+          })
+        },
+        onChangeBillTab(e) {
+          let tab_name = e.name
+          if (tab_name == 'bill_overview') {
+            this.loadBillOverview()
+          }
+          if (tab_name == 'order_list') {
+            this.loadOrderList()
+          }
+        },
+        /*
+         *基础函数
+         */
+        initLineChart(id, title, xAxis_data, series_data) {
+          this.initMultilineChart(id, title, xAxis_data, [series_data])
+        },
+        initMultilineChart(id, title, xAxis_data, series_data) {
+          let series = []
+          series_data.forEach(item => {
+            series.push({
+              type: 'line',
+              smooth: true,
+              ...item
+            })
+          })
+          echarts.init(document.getElementById(id), 'dark').setOption({
+            backgroundColor: '#181a1b',
+            title: {
+              text: title
+            },
+            tooltip: {
+              trigger: 'axis'
+            },
+            xAxis: {
+              type: 'category',
+              data: xAxis_data
+            },
+            yAxis: {
+              type: 'value'
+            },
+            series
+          });
+        },
+        initPieChart(id, title, chart_data) {
+          let option = {
+            title: {
+              text: title,
+              // left: 'right'
+            },
+            tooltip: {
+              trigger: 'item'
+            },
+            series: [{
+              name: 'Access From',
+              type: 'pie',
+              radius: '50%',
+              data: chart_data,
+              emphasis: {
+                itemStyle: {
+                  shadowBlur: 10,
+                  shadowOffsetX: 0,
+                  shadowColor: 'rgba(0, 0, 0, 0.5)'
+                }
+              }
+            }]
+          };
+          echarts.init(document.getElementById(id), 'dark').setOption(option);
+        },
+        aliyun_time(time) {
+          return new Date(new Date(time).getTime() - 8 * 3600 * 1000).format(aliyun_time_format)
+        },
+        local_time(time) {
+          return new Date(new Date(time).getTime()).format(time_format)
+        },
+        getProductName(ProductCode, ProductType, SubscriptionType) {
+          let result = ProductCode
+          for (let i in this.aliyun_data.product_list) {
+            let item = this.aliyun_data.product_list[i]
+            if (item.ProductCode == ProductCode) {
+              result = item.ProductName
+              if (SubscriptionType && SubscriptionType != item.SubscriptionType) {
+                break;
+              }
+              if (ProductType && ProductType == item.ProductType) {
+                break;
+              }
+            }
+          }
+          return result
+        },
+        getRegionId(regionId) {
+          if (!regionId) return '';
+          let res = regionId.split('-')
+          if (res[0] == 'cn') {
+            return [res[0], res[1]].join('-')
+          }
+          return regionId
+        },
+        getRegionTitle(region) {
+          region = this.getRegionId(region)
+          let region_data = JSON.parse(
+            '{"cn-qingdao":"青岛","cn-beijing":"北京","cn-zhangjiakou":"张家口","cn-huhehaote":"呼和浩特","cn-wulanchabu":"乌兰察布","cn-hangzhou":"杭州","cn-shanghai":"上海","cn-shenzhen":"深圳","cn-heyuan":"河源","cn-guangzhou":"广州","cn-chengdu":"成都","cn-nanjing":"南京","cn-hongkong":"香港","ap-southeast-1":"新加坡","ap-southeast-2":"悉尼","ap-southeast-3":"吉隆坡","ap-southeast-5":"雅加达","ap-southeast-6":"马尼拉","ap-southeast-7":"曼谷","ap-south-1":"孟买","ap-northeast-1":"东京","ap-northeast-2":"首尔","us-west-1":"硅谷","us-east-1":"弗吉尼亚","eu-central-1":"法兰克福","eu-west-1":"伦敦","me-east-1":"迪拜"}'
+          )
+          if (region_data[region]) {
+            return region_data[region]
+          }
+          return region
+        },
+        log(data) {
+          if (typeof data == 'object') {
+            console.log(JSON.stringify(data, null, 2))
+          } else {
+            console.log(data)
+          }
+        },
+        showLoading() {
+          this.loadingAnimation = this.$loading({
+            lock: true,
+            // text: 'Loading',
+            spinner: 'el-icon-loading',
+            background: 'rgba(0, 0, 0, 0.7)'
+          })
+        },
+        hideLoading() {
+          if (this.loadingAnimation) {
+            this.loadingAnimation.close()
+          }
+        },
+        formatStorage(i) {
+          if (i > 1024 * 1024 * 1024 * 1024) {
+            return (i / (1024 * 1024 * 1024 * 1024)).toFixed(3) + "T"
+          }
+          if (i > 1024 * 1024 * 1024) {
+            return (i / (1024 * 1024 * 1024)).toFixed(3) + "G"
+          }
+          if (i > 1024 * 1024) {
+            return (i / (1024 * 1024)).toFixed(3) + "M"
+          }
+          if (i > 1024) {
+            return (i / 1024).toFixed(3) + "K"
+          }
+          return i + "B"
+        },
+      }
+    })
+  }
+
+  Date.prototype.format = function (fmt) {
+    var o = {
+      "M+": this.getMonth() + 1,
+      "d+": this.getDate(),
+      "h+": this.getHours(),
+      "m+": this.getMinutes(),
+      "s+": this.getSeconds(),
+      "q+": Math.floor((this.getMonth() + 3) / 3),
+      "S": this.getMilliseconds()
+    };
+    if (/(y+)/.test(fmt)) {
+      fmt = fmt.replace(RegExp.$1, (this.getFullYear() + "").substr(4 - RegExp.$1.length));
+    }
+    for (var k in o) {
+      if (new RegExp("(" + k + ")").test(fmt)) {
+        fmt = fmt.replace(RegExp.$1, (RegExp.$1.length == 1) ? (o[k]) : (("00" + o[k]).substr(("" + o[k]).length)));
+      }
+    }
+    return fmt;
+  }
+</script>
+
+</html>

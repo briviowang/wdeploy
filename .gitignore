@@ -1,0 +1,14 @@
+/deploy*
+/vendor
+/glide.lock
+/test
+/out.json
+*.txt
+*.json
+*.sql
+*.log
+*.bat
+*.exe
+/misc
+.*
+!.gitignore

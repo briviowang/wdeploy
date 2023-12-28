@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="{{.package_prefix}}.dao.{{camel .entity.TABLE_NAME}}Dao">
+
+    <resultMap type="{{.package_prefix}}.dao.entity.{{camel .entity.TABLE_NAME}}Entity" id="BaseResultMap">
+        {{range $key,$val:=.entity.COLUMN_LIST}}
+        <result property="{{camelVar $val.COLUMN_NAME}}" column="{{$val.COLUMN_NAME}}" jdbcType="{{upper $val.DATA_TYPE}}"/>{{end}}
+    </resultMap>
+
+    <select id="getListByPage" resultMap="BaseResultMap">
+        SELECT * FROM {{.entity.TABLE_NAME}}
+        <where>
+
+        </where>
+        ORDER BY id desc
+    </select>
+
+</mapper>

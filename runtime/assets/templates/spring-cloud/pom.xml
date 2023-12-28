@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>payment</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <modules>
+        <module>payment-client</module>
+        <module>payment-metadata</module>
+        <module>payment-acquirerOrder</module>
+        <module>payment-channel</module>
+    </modules>
+    <packaging>pom</packaging>
+
+    <parent>
+        <groupId>com.cpp.supplychain</groupId>
+        <artifactId>framework-bom</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <properties>
+        <version.bss-commons>1.0-SNAPSHOT</version.bss-commons>
+        <version.bss-client>1.0.6.RELEASE</version.bss-client>
+        <version.product-client>1.0-SNAPSHOT</version.product-client>
+        <version.mapstruct>1.4.2.Final</version.mapstruct>
+        <version.user-client>1.0.3-RELEASE</version.user-client>
+        <version.weixin.java>3.7.0</version.weixin.java>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.cpp.supplychain</groupId>
+                <artifactId>bss-commons</artifactId>
+                <version>${version.bss-commons}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.cpp.supplychain</groupId>
+                <artifactId>bss-client</artifactId>
+                <version>${version.bss-client}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.cpp.supplychain</groupId>
+                <artifactId>user-client</artifactId>
+                <version>${version.user-client}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.cpp.supplychain</groupId>
+                <artifactId>product-client</artifactId>
+                <version>${version.product-client}</version>
+            </dependency>
+
+            <!-- 微信支付工具包 -->
+            <dependency>
+                <groupId>com.github.binarywang</groupId>
+                <artifactId>weixin-java-pay</artifactId>
+                <version>${version.weixin.java}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.binarywang</groupId>
+                <artifactId>weixin-java-mp</artifactId>
+                <version>${version.weixin.java}</version>
+            </dependency>
+            <!-- 小程序开发工具包 -->
+            <dependency>
+                <groupId>com.github.binarywang</groupId>
+                <artifactId>wx-java-miniapp-spring-boot-starter</artifactId>
+                <version>${version.weixin.java}</version>
+            </dependency>
+
+
+            <!--  mapstruct  -->
+            <dependency>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct</artifactId>
+                <version>${version.mapstruct}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct-processor</artifactId>
+                <version>${version.mapstruct}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct-jdk8</artifactId>
+                <version>${version.mapstruct}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+</project>
